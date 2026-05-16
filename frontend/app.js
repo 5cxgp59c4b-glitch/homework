@@ -1,0 +1,556 @@
+'use strict';
+
+const API = 'http://127.0.0.1:8000';
+
+const PRIORITY_LABELS   = { high: '高', medium: '中', low: '低' };
+const STATUS_LABELS     = { todo: '未着手', 'in-progress': '進行中', done: '完了' };
+const RECURRENCE_LABELS = { daily: '毎日', weekly: '毎週', monthly: '毎月' };
+
+let state = {
+  tasks:        [],
+  categories:   [],
+  filters:      { status: 'all', priority: 'all', category: 'all', search: '' },
+  editingId:    null,
+  view:         'list',
+  calendarDate: new Date(),
+};
+
+// ---- API ----
+
+// バックエンド（snake_case）→ フロントエンド（camelCase）
+function fromAPI(task) {
+  return {
+    id:                 String(task.id),
+    title:              task.title              || '',
+    description:        task.description        || '',
+    status:             task.status             || 'todo',
+    priority:           task.priority           || 'medium',
+    dueDate:            task.due_date           || null,
+    category:           task.category           || '',
+    tags:               task.tags               || [],
+    recurring:          task.recurring          || false,
+    recurrenceType:     task.recurrence_type    || 'weekly',
+    recurrenceInterval: task.recurrence_interval || 1,
+    createdAt:          task.created_at         || '',
+  };
+}
+
+// フロントエンド（camelCase）→ バックエンド（snake_case）
+function toAPI(data) {
+  return {
+    title:               data.title,
+    description:         data.description         || '',
+    status:              data.status              || 'todo',
+    priority:            data.priority            || 'medium',
+    due_date:            data.dueDate             || null,
+    category:            data.category            || '',
+    tags:                Array.isArray(data.tags) ? data.tags : parseTags(data.tags),
+    recurring:           data.recurring           || false,
+    recurrence_type:     data.recurrenceType      || 'weekly',
+    recurrence_interval: Number(data.recurrenceInterval) || 1,
+  };
+}
+
+async function apiFetch(path, options = {}) {
+  const res = await fetch(API + path, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options,
+  });
+  if (!res.ok) throw new Error(`APIエラー: ${res.status}`);
+  return res.json();
+}
+
+// ---- 初期読み込み ----
+
+async function loadAll() {
+  const [tasks, categories] = await Promise.all([
+    apiFetch('/tasks'),
+    apiFetch('/categories'),
+  ]);
+  state.tasks      = tasks.map(fromAPI);
+  state.categories = categories.map(c => c.name);
+  render();
+}
+
+// ---- Task operations ----
+
+async function addTask(data) {
+  const count   = data.recurring ? (Number(data.recurrenceCount) || 1) : 1;
+  const newTasks = [];
+  let currentDue = data.dueDate || null;
+
+  for (let i = 0; i < count; i++) {
+    const task = await apiFetch('/tasks', {
+      method: 'POST',
+      body:   JSON.stringify(toAPI({ ...data, dueDate: currentDue, tags: parseTags(data.tags) })),
+    });
+    newTasks.push(fromAPI(task));
+    if (currentDue && i < count - 1) {
+      currentDue = calculateNextDue(currentDue, data.recurrenceType, data.recurrenceInterval);
+    }
+  }
+
+  state.tasks.unshift(...newTasks);
+  render();
+}
+
+async function updateTask(id, data) {
+  const task = await apiFetch(`/tasks/${id}`, {
+    method: 'PUT',
+    body:   JSON.stringify(toAPI({ ...data, tags: parseTags(data.tags) })),
+  });
+  state.tasks = state.tasks.map(t => t.id === id ? fromAPI(task) : t);
+  render();
+}
+
+async function toggleDone(id) {
+  const task = state.tasks.find(t => t.id === id);
+  if (!task) return;
+  const becomingDone = task.status !== 'done';
+
+  const updated = await apiFetch(`/tasks/${id}`, {
+    method: 'PUT',
+    body:   JSON.stringify(toAPI({ ...task, status: becomingDone ? 'done' : 'todo' })),
+  });
+  state.tasks = state.tasks.map(t => t.id === id ? fromAPI(updated) : t);
+  render();
+}
+
+async function deleteTask(id) {
+  if (!confirm('この課題を削除しますか？')) return;
+  await apiFetch(`/tasks/${id}`, { method: 'DELETE' });
+  state.tasks = state.tasks.filter(t => t.id !== id);
+  render();
+}
+
+// ---- Category operations ----
+
+async function addCategory(name) {
+  if (!name || state.categories.includes(name)) return false;
+  await apiFetch('/categories', {
+    method: 'POST',
+    body:   JSON.stringify({ name }),
+  });
+  state.categories.push(name);
+  render();
+  return true;
+}
+
+async function deleteCategory(name) {
+  if (!confirm(`カテゴリ「${name}」を削除しますか？\nこのカテゴリの課題はカテゴリなしになります。`)) return;
+  await apiFetch(`/categories/${encodeURIComponent(name)}`, { method: 'DELETE' });
+  state.categories = state.categories.filter(c => c !== name);
+  state.tasks      = state.tasks.map(t => t.category === name ? { ...t, category: '' } : t);
+  render();
+}
+
+// ---- Utilities ----
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.toLocaleDateString('ja-JP', { month: 'long', day: 'numeric' });
+}
+
+function getDueStatus(dateStr) {
+  if (!dateStr) return '';
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due  = new Date(dateStr + 'T00:00:00');
+  const diff = (due - today) / 86400000;
+  if (diff < 0)  return 'overdue';
+  if (diff <= 3) return 'due-soon';
+  return '';
+}
+
+function parseTags(str) {
+  if (Array.isArray(str)) return str;
+  return (str || '').split(',').map(t => t.trim()).filter(Boolean);
+}
+
+function calculateNextDue(dateStr, type, interval) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const n = Number(interval) || 1;
+  if (type === 'daily')   d.setDate(d.getDate() + n);
+  if (type === 'weekly')  d.setDate(d.getDate() + n * 7);
+  if (type === 'monthly') d.setMonth(d.getMonth() + n);
+  const y   = d.getFullYear();
+  const m   = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+// ---- Filtering ----
+
+function getFilteredTasks() {
+  const { status, priority, category, search } = state.filters;
+  return state.tasks.filter(t => {
+    if (status   !== 'all' && t.status   !== status)   return false;
+    if (priority !== 'all' && t.priority !== priority) return false;
+    if (category !== 'all' && t.category !== category) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      if (!t.title.toLowerCase().includes(q) &&
+          !t.description.toLowerCase().includes(q) &&
+          !t.tags.some(tag => tag.toLowerCase().includes(q))) return false;
+    }
+    return true;
+  });
+}
+
+// ---- View ----
+
+function setView(view) {
+  state.view = view;
+  document.getElementById('listViewBtn').classList.toggle('active', view === 'list');
+  document.getElementById('calendarViewBtn').classList.toggle('active', view === 'calendar');
+  document.getElementById('taskList').style.display        = view === 'list'     ? 'flex'  : 'none';
+  document.getElementById('calendarSection').style.display = view === 'calendar' ? 'block' : 'none';
+  if (view === 'calendar') renderCalendar();
+}
+
+// ---- Render ----
+
+function render() {
+  renderStats();
+  renderTasks();
+  renderCategoryFilter();
+  renderCategoryOptions();
+  renderCategoryList();
+  if (state.view === 'calendar') renderCalendar();
+}
+
+function renderStats() {
+  const tasks      = state.tasks;
+  const total      = tasks.length;
+  const inProgress = tasks.filter(t => t.status === 'in-progress').length;
+  const done       = tasks.filter(t => t.status === 'done').length;
+  const overdue    = tasks.filter(t =>
+    t.dueDate && t.status !== 'done' && getDueStatus(t.dueDate) === 'overdue'
+  ).length;
+
+  document.getElementById('stats').innerHTML = `
+    <div class="stat-card">
+      <span class="stat-value">${total}</span>
+      <span class="stat-label">合計</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value">${inProgress}</span>
+      <span class="stat-label">進行中</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value">${done}</span>
+      <span class="stat-label">完了</span>
+    </div>
+    ${overdue > 0 ? `
+    <div class="stat-card" style="border-color:#fca5a5;">
+      <span class="stat-value" style="color:#dc2626;">${overdue}</span>
+      <span class="stat-label">期限超過</span>
+    </div>` : ''}
+  `;
+}
+
+function renderTasks() {
+  const tasks     = getFilteredTasks();
+  const container = document.getElementById('taskList');
+
+  if (tasks.length === 0) {
+    container.innerHTML = `<div class="empty-state"><p>課題がありません</p></div>`;
+    return;
+  }
+
+  container.innerHTML = tasks.map(task => {
+    const dueStatus = task.dueDate ? getDueStatus(task.dueDate) : '';
+    const dueLabel  = { overdue: ' 期限超過', 'due-soon': ' 間近', '': '' }[dueStatus];
+
+    const dueDateHtml   = task.dueDate
+      ? `<span class="due-date ${dueStatus}">📅 ${formatDate(task.dueDate)}${dueLabel}</span>` : '';
+    const categoryHtml  = task.category
+      ? `<span class="badge badge-category">${escapeHtml(task.category)}</span>` : '';
+    const tagsHtml      = task.tags.map(tag =>
+      `<span class="badge badge-tag">#${escapeHtml(tag)}</span>`
+    ).join('');
+    const recurringHtml = task.recurring
+      ? `<span class="badge badge-recurring">🔄 ${RECURRENCE_LABELS[task.recurrenceType] || '繰り返し'}</span>` : '';
+
+    return `
+      <div class="task-item priority-${task.priority} status-${task.status}">
+        <input type="checkbox" class="task-check" ${task.status === 'done' ? 'checked' : ''}
+          onchange="toggleDone('${task.id}')">
+        <div class="task-content">
+          <div class="task-title">${escapeHtml(task.title)}</div>
+          ${task.description ? `<div class="task-description">${escapeHtml(task.description)}</div>` : ''}
+          <div class="task-meta">
+            <span class="badge badge-priority-${task.priority}">${PRIORITY_LABELS[task.priority]}</span>
+            <span class="badge badge-status-${task.status}">${STATUS_LABELS[task.status]}</span>
+            ${categoryHtml}
+            ${tagsHtml}
+            ${recurringHtml}
+            ${dueDateHtml}
+          </div>
+        </div>
+        <div class="task-actions">
+          <button class="icon-btn" onclick="openEditModal('${task.id}')" title="編集">✏️</button>
+          <button class="icon-btn delete" onclick="deleteTask('${task.id}')" title="削除">🗑️</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderCalendar() {
+  const year  = state.calendarDate.getFullYear();
+  const month = state.calendarDate.getMonth();
+
+  document.getElementById('calendarMonthLabel').textContent = `${year}年${month + 1}月`;
+
+  const firstDow    = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const today       = new Date();
+
+  const taskMap = {};
+  getFilteredTasks().forEach(task => {
+    if (!task.dueDate) return;
+    const d = new Date(task.dueDate + 'T00:00:00');
+    if (d.getFullYear() !== year || d.getMonth() !== month) return;
+    const key = d.getDate();
+    if (!taskMap[key]) taskMap[key] = [];
+    taskMap[key].push(task);
+  });
+
+  let cells = '';
+
+  for (let i = 0; i < firstDow; i++) {
+    cells += `<div class="cal-cell cal-cell-empty"></div>`;
+  }
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const isToday = today.getFullYear() === year
+                 && today.getMonth()    === month
+                 && today.getDate()     === day;
+    const tasks     = taskMap[day] || [];
+    const visible   = tasks.slice(0, 3);
+    const moreCount = tasks.length - visible.length;
+
+    const tasksHtml = visible.map(t => `
+      <span class="cal-task priority-dot-${t.priority} ${t.status === 'done' ? 'cal-task-done' : ''}"
+            onclick="openEditModal('${t.id}')"
+            title="${escapeHtml(t.title)}">${escapeHtml(t.title)}</span>
+    `).join('');
+
+    cells += `
+      <div class="cal-cell ${isToday ? 'cal-cell-today' : ''}">
+        <div class="cal-day-number ${isToday ? 'cal-day-today' : ''}">${day}</div>
+        ${tasksHtml}
+        ${moreCount > 0 ? `<div class="cal-more">+${moreCount}件</div>` : ''}
+      </div>
+    `;
+  }
+
+  document.getElementById('calendarGrid').innerHTML = cells;
+}
+
+function renderCategoryFilter() {
+  const select  = document.getElementById('categoryFilter');
+  const current = state.filters.category;
+  select.innerHTML = `<option value="all">すべてのカテゴリ</option>`
+    + state.categories.map(c =>
+        `<option value="${escapeHtml(c)}" ${current === c ? 'selected' : ''}>${escapeHtml(c)}</option>`
+      ).join('');
+}
+
+function renderCategoryOptions() {
+  const select  = document.getElementById('taskCategory');
+  const current = select.value;
+  select.innerHTML = `<option value="">なし</option>`
+    + state.categories.map(c =>
+        `<option value="${escapeHtml(c)}" ${current === c ? 'selected' : ''}>${escapeHtml(c)}</option>`
+      ).join('');
+}
+
+function renderCategoryList() {
+  const container = document.getElementById('categoryList');
+  if (!container) return;
+  if (state.categories.length === 0) {
+    container.innerHTML = `<p style="font-size:13px;color:#aaa;text-align:center;padding:8px 0;">カテゴリがありません</p>`;
+    return;
+  }
+  container.innerHTML = state.categories.map(c => `
+    <div class="category-item">
+      <span>${escapeHtml(c)}</span>
+      <button class="icon-btn delete" onclick="deleteCategory('${escapeHtml(c)}')" title="削除">🗑️</button>
+    </div>
+  `).join('');
+}
+
+// ---- Modal helpers ----
+
+function openAddModal() {
+  state.editingId = null;
+  document.getElementById('modalTitle').textContent           = '課題を追加';
+  document.getElementById('submitBtn').textContent            = '追加';
+  document.getElementById('taskForm').reset();
+  document.getElementById('taskPriority').value               = 'medium';
+  document.getElementById('taskStatus').value                 = 'todo';
+  document.getElementById('taskRecurring').checked            = false;
+  document.getElementById('taskRecurrenceType').value         = 'weekly';
+  document.getElementById('taskRecurrenceInterval').value     = '1';
+  document.getElementById('taskRecurrenceCount').value        = '1';
+  document.getElementById('recurrenceOptions').classList.remove('open');
+  document.querySelector('.recurring-label').style.display    = '';
+  renderCategoryOptions();
+  document.getElementById('modalOverlay').classList.add('open');
+  document.getElementById('taskTitle').focus();
+}
+
+function openEditModal(id) {
+  const task = state.tasks.find(t => t.id === id);
+  if (!task) return;
+  state.editingId = id;
+
+  document.getElementById('modalTitle').textContent           = '課題を編集';
+  document.getElementById('submitBtn').textContent            = '保存';
+  document.getElementById('taskTitle').value                  = task.title;
+  document.getElementById('taskDescription').value            = task.description;
+  document.getElementById('taskPriority').value               = task.priority;
+  document.getElementById('taskStatus').value                 = task.status;
+  document.getElementById('taskDueDate').value                = task.dueDate || '';
+  document.getElementById('taskTags').value                   = task.tags.join(', ');
+  document.getElementById('taskRecurring').checked            = !!task.recurring;
+  document.getElementById('taskRecurrenceType').value         = task.recurrenceType     || 'weekly';
+  document.getElementById('taskRecurrenceInterval').value     = task.recurrenceInterval || 1;
+  document.getElementById('recurrenceOptions').classList.remove('open');
+  document.querySelector('.recurring-label').style.display    = 'none';
+  renderCategoryOptions();
+  document.getElementById('taskCategory').value = task.category || '';
+  document.getElementById('modalOverlay').classList.add('open');
+  document.getElementById('taskTitle').focus();
+}
+
+function closeTaskModal() {
+  document.getElementById('modalOverlay').classList.remove('open');
+  state.editingId = null;
+}
+
+function closeCategoryModal() {
+  document.getElementById('categoryModalOverlay').classList.remove('open');
+}
+
+// ---- Event Listeners ----
+
+document.getElementById('addTaskBtn').addEventListener('click', openAddModal);
+document.getElementById('modalClose').addEventListener('click', closeTaskModal);
+document.getElementById('cancelBtn').addEventListener('click', closeTaskModal);
+
+document.getElementById('modalOverlay').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeTaskModal();
+});
+
+document.getElementById('taskForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const data = {
+    title:              document.getElementById('taskTitle').value,
+    description:        document.getElementById('taskDescription').value,
+    priority:           document.getElementById('taskPriority').value,
+    status:             document.getElementById('taskStatus').value,
+    dueDate:            document.getElementById('taskDueDate').value,
+    category:           document.getElementById('taskCategory').value,
+    tags:               document.getElementById('taskTags').value,
+    recurring:          document.getElementById('taskRecurring').checked,
+    recurrenceType:     document.getElementById('taskRecurrenceType').value,
+    recurrenceInterval: document.getElementById('taskRecurrenceInterval').value,
+    recurrenceCount:    document.getElementById('taskRecurrenceCount').value,
+  };
+  if (!data.title.trim()) return;
+  state.editingId ? await updateTask(state.editingId, data) : await addTask(data);
+  closeTaskModal();
+});
+
+document.getElementById('taskRecurring').addEventListener('change', e => {
+  document.getElementById('recurrenceOptions').classList.toggle('open', e.target.checked);
+});
+
+document.getElementById('searchInput').addEventListener('input', e => {
+  state.filters.search = e.target.value;
+  renderTasks();
+  if (state.view === 'calendar') renderCalendar();
+});
+
+document.getElementById('statusFilter').addEventListener('change', e => {
+  state.filters.status = e.target.value;
+  renderTasks();
+  if (state.view === 'calendar') renderCalendar();
+});
+
+document.getElementById('priorityFilter').addEventListener('change', e => {
+  state.filters.priority = e.target.value;
+  renderTasks();
+  if (state.view === 'calendar') renderCalendar();
+});
+
+document.getElementById('categoryFilter').addEventListener('change', e => {
+  state.filters.category = e.target.value;
+  renderTasks();
+  if (state.view === 'calendar') renderCalendar();
+});
+
+document.getElementById('listViewBtn').addEventListener('click', () => setView('list'));
+document.getElementById('calendarViewBtn').addEventListener('click', () => setView('calendar'));
+
+document.getElementById('calPrevBtn').addEventListener('click', () => {
+  state.calendarDate.setMonth(state.calendarDate.getMonth() - 1);
+  renderCalendar();
+});
+
+document.getElementById('calNextBtn').addEventListener('click', () => {
+  state.calendarDate.setMonth(state.calendarDate.getMonth() + 1);
+  renderCalendar();
+});
+
+document.getElementById('manageCategoriesBtn').addEventListener('click', () => {
+  renderCategoryList();
+  document.getElementById('categoryModalOverlay').classList.add('open');
+  document.getElementById('newCategoryInput').value = '';
+  document.getElementById('newCategoryInput').focus();
+});
+
+document.getElementById('categoryModalClose').addEventListener('click', closeCategoryModal);
+
+document.getElementById('categoryModalOverlay').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeCategoryModal();
+});
+
+document.getElementById('addCategoryBtn').addEventListener('click', async () => {
+  const input = document.getElementById('newCategoryInput');
+  const name  = input.value.trim();
+  if (!name) return;
+  if (state.categories.includes(name)) {
+    alert(`カテゴリ「${name}」はすでに存在します`);
+    return;
+  }
+  await addCategory(name);
+  input.value = '';
+  input.focus();
+});
+
+document.getElementById('newCategoryInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); document.getElementById('addCategoryBtn').click(); }
+});
+
+document.addEventListener('keydown', e => {
+  const isInput = ['input', 'textarea', 'select'].includes(e.target.tagName.toLowerCase());
+  if (e.key === 'Escape') { closeTaskModal(); closeCategoryModal(); }
+  if (e.key === 'n' && !isInput && !e.metaKey && !e.ctrlKey) openAddModal();
+});
+
+// ---- Init ----
+loadAll();

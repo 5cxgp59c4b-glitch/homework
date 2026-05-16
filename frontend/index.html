@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>課題管理</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <h1 class="header-title">課題管理</h1>
+      <div class="header-actions">
+        <button class="btn btn-ghost" id="manageCategoriesBtn">カテゴリ管理</button>
+        <button class="btn btn-primary" id="addTaskBtn">+ 課題を追加</button>
+      </div>
+    </header>
+
+    <main class="main">
+      <div class="filters">
+        <input type="text" class="filter-search" id="searchInput" placeholder="タイトル・説明・タグで検索...">
+        <select class="filter-select" id="statusFilter">
+          <option value="all">すべてのステータス</option>
+          <option value="todo">未着手</option>
+          <option value="in-progress">進行中</option>
+          <option value="done">完了</option>
+        </select>
+        <select class="filter-select" id="priorityFilter">
+          <option value="all">すべての優先度</option>
+          <option value="high">高</option>
+          <option value="medium">中</option>
+          <option value="low">低</option>
+        </select>
+        <select class="filter-select" id="categoryFilter">
+          <option value="all">すべてのカテゴリ</option>
+        </select>
+      </div>
+
+      <div class="toolbar">
+        <div class="stats" id="stats"></div>
+        <div class="view-toggle">
+          <button class="view-btn active" id="listViewBtn">リスト</button>
+          <button class="view-btn" id="calendarViewBtn">カレンダー</button>
+        </div>
+      </div>
+
+      <!-- リスト表示 -->
+      <div class="task-list" id="taskList"></div>
+
+      <!-- カレンダー表示 -->
+      <div class="calendar-section" id="calendarSection" style="display:none;">
+        <div class="calendar-header">
+          <button class="icon-btn cal-nav-btn" id="calPrevBtn">&#8249;</button>
+          <span class="calendar-month-label" id="calendarMonthLabel"></span>
+          <button class="icon-btn cal-nav-btn" id="calNextBtn">&#8250;</button>
+        </div>
+        <div class="calendar-dow">
+          <span>日</span><span>月</span><span>火</span>
+          <span>水</span><span>木</span><span>金</span><span>土</span>
+        </div>
+        <div class="calendar-grid" id="calendarGrid"></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- 課題追加/編集モーダル -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modalTitle">課題を追加</h2>
+        <button class="modal-close" id="modalClose">&times;</button>
+      </div>
+      <form class="modal-form" id="taskForm">
+        <div class="form-group">
+          <label class="form-label">タイトル <span class="required">*</span></label>
+          <input type="text" class="form-input" id="taskTitle" required placeholder="課題のタイトルを入力">
+        </div>
+        <div class="form-group">
+          <label class="form-label">説明</label>
+          <textarea class="form-textarea" id="taskDescription" placeholder="詳細を入力..." rows="3"></textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">優先度</label>
+            <select class="form-input" id="taskPriority">
+              <option value="high">高</option>
+              <option value="medium" selected>中</option>
+              <option value="low">低</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">ステータス</label>
+            <select class="form-input" id="taskStatus">
+              <option value="todo">未着手</option>
+              <option value="in-progress">進行中</option>
+              <option value="done">完了</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">期限</label>
+            <input type="date" class="form-input" id="taskDueDate">
+          </div>
+          <div class="form-group">
+            <label class="form-label">カテゴリ</label>
+            <select class="form-input" id="taskCategory">
+              <option value="">なし</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">タグ <span class="form-hint">（カンマ区切り）</span></label>
+          <input type="text" class="form-input" id="taskTags" placeholder="例: urgent, frontend, bug">
+        </div>
+        <div class="form-group">
+          <label class="recurring-label">
+            <input type="checkbox" id="taskRecurring"> 繰り返しタスク
+          </label>
+        </div>
+        <div id="recurrenceOptions" class="recurrence-options">
+          <div class="form-row">
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label">種類</label>
+              <select class="form-input" id="taskRecurrenceType">
+                <option value="daily">毎日</option>
+                <option value="weekly" selected>毎週</option>
+                <option value="monthly">毎月</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label">間隔 <span class="form-hint">（週・日・月）</span></label>
+              <input type="number" class="form-input" id="taskRecurrenceInterval" value="1" min="1" max="99">
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label class="form-label">繰り返し回数</label>
+              <input type="number" class="form-input" id="taskRecurrenceCount" value="1" min="1" max="52">
+            </div>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="cancelBtn">キャンセル</button>
+          <button type="submit" class="btn btn-primary" id="submitBtn">追加</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- カテゴリ管理モーダル -->
+  <div class="modal-overlay" id="categoryModalOverlay">
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <h2 class="modal-title">カテゴリ管理</h2>
+        <button class="modal-close" id="categoryModalClose">&times;</button>
+      </div>
+      <div id="categoryList" class="category-list"></div>
+      <div class="form-row" style="margin-top:12px; align-items:flex-end;">
+        <div class="form-group" style="flex:1; margin-bottom:0;">
+          <input type="text" class="form-input" id="newCategoryInput" placeholder="新しいカテゴリ名">
+        </div>
+        <button class="btn btn-primary" id="addCategoryBtn" style="flex-shrink:0;">追加</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
