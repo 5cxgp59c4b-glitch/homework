@@ -4,7 +4,7 @@
 
 ## 使い方
 
-`frontend/index.html` をブラウザで開くだけで使用できます。
+`index.html` をブラウザで開くだけで使用できます。
 
 ## 機能
 
@@ -28,8 +28,7 @@
 ## ファイル構成
 
 ```
-frontend/
-  index.html   # HTML構造
-  style.css    # スタイル
-  app.js       # アプリケーションロジック
+index.html   # HTML構造
+style.css    # スタイル
+app.js       # アプリケーションロジック
 ```
