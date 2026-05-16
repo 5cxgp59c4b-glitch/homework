@@ -1,6 +1,6 @@
 'use strict';
 
-const API = 'http://127.0.0.1:8000';
+const STORAGE_KEY = 'task-manager-v1';
 
 const PRIORITY_LABELS   = { high: '高', medium: '中', low: '低' };
 const STATUS_LABELS     = { todo: '未着手', 'in-progress': '進行中', done: '完了' };
@@ -8,143 +8,40 @@ const RECURRENCE_LABELS = { daily: '毎日', weekly: '毎週', monthly: '毎月'
 
 let state = {
   tasks:        [],
-  categories:   [],
+  categories:   ['仕事', '個人', '学習'],
   filters:      { status: 'all', priority: 'all', category: 'all', search: '' },
   editingId:    null,
-  view:         'list',
+  view:         'calendar',
   calendarDate: new Date(),
 };
 
-// ---- API ----
+// ---- Storage ----
 
-// バックエンド（snake_case）→ フロントエンド（camelCase）
-function fromAPI(task) {
-  return {
-    id:                 String(task.id),
-    title:              task.title              || '',
-    description:        task.description        || '',
-    status:             task.status             || 'todo',
-    priority:           task.priority           || 'medium',
-    dueDate:            task.due_date           || null,
-    category:           task.category           || '',
-    tags:               task.tags               || [],
-    recurring:          task.recurring          || false,
-    recurrenceType:     task.recurrence_type    || 'weekly',
-    recurrenceInterval: task.recurrence_interval || 1,
-    createdAt:          task.created_at         || '',
-  };
-}
-
-// フロントエンド（camelCase）→ バックエンド（snake_case）
-function toAPI(data) {
-  return {
-    title:               data.title,
-    description:         data.description         || '',
-    status:              data.status              || 'todo',
-    priority:            data.priority            || 'medium',
-    due_date:            data.dueDate             || null,
-    category:            data.category            || '',
-    tags:                Array.isArray(data.tags) ? data.tags : parseTags(data.tags),
-    recurring:           data.recurring           || false,
-    recurrence_type:     data.recurrenceType      || 'weekly',
-    recurrence_interval: Number(data.recurrenceInterval) || 1,
-  };
-}
-
-async function apiFetch(path, options = {}) {
-  const res = await fetch(API + path, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  });
-  if (!res.ok) throw new Error(`APIエラー: ${res.status}`);
-  return res.json();
-}
-
-// ---- 初期読み込み ----
-
-async function loadAll() {
-  const [tasks, categories] = await Promise.all([
-    apiFetch('/tasks'),
-    apiFetch('/categories'),
-  ]);
-  state.tasks      = tasks.map(fromAPI);
-  state.categories = categories.map(c => c.name);
-  render();
-}
-
-// ---- Task operations ----
-
-async function addTask(data) {
-  const count   = data.recurring ? (Number(data.recurrenceCount) || 1) : 1;
-  const newTasks = [];
-  let currentDue = data.dueDate || null;
-
-  for (let i = 0; i < count; i++) {
-    const task = await apiFetch('/tasks', {
-      method: 'POST',
-      body:   JSON.stringify(toAPI({ ...data, dueDate: currentDue, tags: parseTags(data.tags) })),
-    });
-    newTasks.push(fromAPI(task));
-    if (currentDue && i < count - 1) {
-      currentDue = calculateNextDue(currentDue, data.recurrenceType, data.recurrenceInterval);
+function loadData() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      const data       = JSON.parse(saved);
+      state.tasks      = data.tasks      || [];
+      state.categories = data.categories || ['仕事', '個人', '学習'];
     }
+  } catch (e) {
+    console.error('データの読み込みに失敗しました:', e);
   }
-
-  state.tasks.unshift(...newTasks);
-  render();
 }
 
-async function updateTask(id, data) {
-  const task = await apiFetch(`/tasks/${id}`, {
-    method: 'PUT',
-    body:   JSON.stringify(toAPI({ ...data, tags: parseTags(data.tags) })),
-  });
-  state.tasks = state.tasks.map(t => t.id === id ? fromAPI(task) : t);
-  render();
-}
-
-async function toggleDone(id) {
-  const task = state.tasks.find(t => t.id === id);
-  if (!task) return;
-  const becomingDone = task.status !== 'done';
-
-  const updated = await apiFetch(`/tasks/${id}`, {
-    method: 'PUT',
-    body:   JSON.stringify(toAPI({ ...task, status: becomingDone ? 'done' : 'todo' })),
-  });
-  state.tasks = state.tasks.map(t => t.id === id ? fromAPI(updated) : t);
-  render();
-}
-
-async function deleteTask(id) {
-  if (!confirm('この課題を削除しますか？')) return;
-  await apiFetch(`/tasks/${id}`, { method: 'DELETE' });
-  state.tasks = state.tasks.filter(t => t.id !== id);
-  render();
-}
-
-// ---- Category operations ----
-
-async function addCategory(name) {
-  if (!name || state.categories.includes(name)) return false;
-  await apiFetch('/categories', {
-    method: 'POST',
-    body:   JSON.stringify({ name }),
-  });
-  state.categories.push(name);
-  render();
-  return true;
-}
-
-async function deleteCategory(name) {
-  if (!confirm(`カテゴリ「${name}」を削除しますか？\nこのカテゴリの課題はカテゴリなしになります。`)) return;
-  await apiFetch(`/categories/${encodeURIComponent(name)}`, { method: 'DELETE' });
-  state.categories = state.categories.filter(c => c !== name);
-  state.tasks      = state.tasks.map(t => t.category === name ? { ...t, category: '' } : t);
-  render();
+function saveData() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    tasks:      state.tasks,
+    categories: state.categories,
+  }));
 }
 
 // ---- Utilities ----
+
+function generateId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
 
 function escapeHtml(str) {
   return String(str)
@@ -187,6 +84,88 @@ function calculateNextDue(dateStr, type, interval) {
   const m   = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
+}
+
+// ---- Task operations ----
+
+function addTask(data) {
+  const count    = data.recurring ? (Number(data.recurrenceCount) || 1) : 1;
+  let currentDue = data.dueDate || null;
+
+  for (let i = 0; i < count; i++) {
+    state.tasks.unshift({
+      id:                 generateId(),
+      title:              data.title.trim(),
+      description:        (data.description || '').trim(),
+      status:             data.status             || 'todo',
+      priority:           data.priority           || 'medium',
+      dueDate:            currentDue,
+      category:           data.category           || '',
+      tags:               parseTags(data.tags),
+      recurring:          data.recurring          || false,
+      recurrenceType:     data.recurrenceType     || 'weekly',
+      recurrenceInterval: Number(data.recurrenceInterval) || 1,
+      createdAt:          new Date().toISOString(),
+    });
+    if (currentDue && i < count - 1) {
+      currentDue = calculateNextDue(currentDue, data.recurrenceType, data.recurrenceInterval);
+    }
+  }
+  saveData();
+  render();
+}
+
+function updateTask(id, data) {
+  state.tasks = state.tasks.map(t =>
+    t.id !== id ? t : {
+      ...t,
+      title:              data.title.trim(),
+      description:        (data.description || '').trim(),
+      status:             data.status,
+      priority:           data.priority,
+      dueDate:            data.dueDate || null,
+      category:           data.category || '',
+      tags:               parseTags(data.tags),
+      recurring:          data.recurring,
+      recurrenceType:     data.recurrenceType     || 'weekly',
+      recurrenceInterval: Number(data.recurrenceInterval) || 1,
+    }
+  );
+  saveData();
+  render();
+}
+
+function toggleDone(id) {
+  state.tasks = state.tasks.map(t =>
+    t.id !== id ? t : { ...t, status: t.status === 'done' ? 'todo' : 'done' }
+  );
+  saveData();
+  render();
+}
+
+function deleteTask(id) {
+  if (!confirm('この課題を削除しますか？')) return;
+  state.tasks = state.tasks.filter(t => t.id !== id);
+  saveData();
+  render();
+}
+
+// ---- Category operations ----
+
+function addCategory(name) {
+  if (!name || state.categories.includes(name)) return false;
+  state.categories.push(name);
+  saveData();
+  render();
+  return true;
+}
+
+function deleteCategory(name) {
+  if (!confirm(`カテゴリ「${name}」を削除しますか？\nこのカテゴリの課題はカテゴリなしになります。`)) return;
+  state.categories = state.categories.filter(c => c !== name);
+  state.tasks      = state.tasks.map(t => t.category === name ? { ...t, category: '' } : t);
+  saveData();
+  render();
 }
 
 // ---- Filtering ----
@@ -455,7 +434,7 @@ document.getElementById('modalOverlay').addEventListener('click', e => {
   if (e.target === e.currentTarget) closeTaskModal();
 });
 
-document.getElementById('taskForm').addEventListener('submit', async e => {
+document.getElementById('taskForm').addEventListener('submit', e => {
   e.preventDefault();
   const data = {
     title:              document.getElementById('taskTitle').value,
@@ -471,7 +450,7 @@ document.getElementById('taskForm').addEventListener('submit', async e => {
     recurrenceCount:    document.getElementById('taskRecurrenceCount').value,
   };
   if (!data.title.trim()) return;
-  state.editingId ? await updateTask(state.editingId, data) : await addTask(data);
+  state.editingId ? updateTask(state.editingId, data) : addTask(data);
   closeTaskModal();
 });
 
@@ -529,7 +508,7 @@ document.getElementById('categoryModalOverlay').addEventListener('click', e => {
   if (e.target === e.currentTarget) closeCategoryModal();
 });
 
-document.getElementById('addCategoryBtn').addEventListener('click', async () => {
+document.getElementById('addCategoryBtn').addEventListener('click', () => {
   const input = document.getElementById('newCategoryInput');
   const name  = input.value.trim();
   if (!name) return;
@@ -537,7 +516,7 @@ document.getElementById('addCategoryBtn').addEventListener('click', async () => 
     alert(`カテゴリ「${name}」はすでに存在します`);
     return;
   }
-  await addCategory(name);
+  addCategory(name);
   input.value = '';
   input.focus();
 });
@@ -553,4 +532,6 @@ document.addEventListener('keydown', e => {
 });
 
 // ---- Init ----
-loadAll();
+loadData();
+setView('calendar');
+render();
