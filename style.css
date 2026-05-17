@@ -48,6 +48,7 @@ body {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  margin-top: 12px;
   margin-bottom: 16px;
 }
 
@@ -366,7 +367,7 @@ body {
 }
 
 .cal-cell {
-  min-height: 100px;
+  min-height: 130px;
   padding: 6px 5px;
   border-right: 1px solid #e5e5e5;
   border-bottom: 1px solid #e5e5e5;
@@ -619,7 +620,7 @@ body {
 
   /* カレンダー */
   .cal-cell {
-    min-height: 80px;
+    min-height: 110px;
     padding: 4px 3px;
   }
   .cal-day-number { font-size: 12px; }

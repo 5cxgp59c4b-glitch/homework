@@ -194,6 +194,7 @@ function setView(view) {
   document.getElementById('calendarViewBtn').classList.toggle('active', view === 'calendar');
   document.getElementById('taskList').style.display        = view === 'list'     ? 'flex'  : 'none';
   document.getElementById('calendarSection').style.display = view === 'calendar' ? 'block' : 'none';
+  document.querySelector('.filters').style.display         = view === 'list'     ? ''      : 'none';
   if (view === 'calendar') renderCalendar();
 }
 
