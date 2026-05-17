@@ -372,6 +372,37 @@ function renderCategoryList() {
   `).join('');
 }
 
+// ---- Export / Import ----
+
+function exportData() {
+  const data = JSON.stringify({ tasks: state.tasks, categories: state.categories }, null, 2);
+  const blob = new Blob([data], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `tasks-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importData(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!Array.isArray(data.tasks)) throw new Error();
+      if (!confirm(`${data.tasks.length}件の課題をインポートします。現在のデータは上書きされます。よろしいですか？`)) return;
+      state.tasks      = data.tasks;
+      state.categories = Array.isArray(data.categories) ? data.categories : state.categories;
+      saveData();
+      render();
+    } catch {
+      alert('ファイルの形式が正しくありません。');
+    }
+  };
+  reader.readAsText(file);
+}
+
 // ---- Modal helpers ----
 
 function openAddModal() {
@@ -530,6 +561,17 @@ document.addEventListener('keydown', e => {
   const isInput = ['input', 'textarea', 'select'].includes(e.target.tagName.toLowerCase());
   if (e.key === 'Escape') { closeTaskModal(); closeCategoryModal(); }
   if (e.key === 'n' && !isInput && !e.metaKey && !e.ctrlKey) openAddModal();
+});
+
+document.getElementById('exportBtn').addEventListener('click', exportData);
+
+document.getElementById('importBtn').addEventListener('click', () => {
+  document.getElementById('importFile').value = '';
+  document.getElementById('importFile').click();
+});
+
+document.getElementById('importFile').addEventListener('change', e => {
+  if (e.target.files[0]) importData(e.target.files[0]);
 });
 
 // ---- Init ----
