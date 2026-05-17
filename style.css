@@ -434,14 +434,14 @@ body {
 }
 
 .btn-sm {
-  padding: 6px 14px;
+  padding: 7px 18px;
   font-size: 13px;
 }
 
 @media (max-width: 600px) {
-  .btn-sm {
-    padding: 5px 10px;
-    font-size: 12px;
+  .btn.btn-sm {
+    padding: 7px 18px;
+    font-size: 13px;
   }
 }
 
