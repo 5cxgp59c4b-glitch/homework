@@ -3,12 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f5f5f7">
   <title>課題管理</title>
   <link rel="stylesheet" href="style.css">
   <link rel="icon" href="tasks.png">
   <link rel="apple-touch-icon" href="tasks.png">
 </head>
 <body>
+  <a href="#main" class="skip-link">メインコンテンツにスキップ</a>
   <div class="app">
     <header class="header">
       <h1 class="header-title">課題管理</h1>
@@ -18,7 +20,7 @@
       </div>
     </header>
 
-    <main class="main">
+    <main class="main" id="main">
       <div class="toolbar">
         <div class="view-toggle">
           <button class="view-btn active" id="listViewBtn">リスト</button>
@@ -27,20 +29,20 @@
       </div>
 
       <div class="filters">
-        <input type="text" class="filter-search" id="searchInput" placeholder="タイトル・説明・タグで検索...">
-        <select class="filter-select" id="statusFilter">
+        <input type="text" class="filter-search" id="searchInput" aria-label="タイトル・説明・タグで検索" placeholder="タイトル・説明・タグで検索…" autocomplete="off">
+        <select class="filter-select" id="statusFilter" aria-label="ステータスで絞り込み">
           <option value="all">すべてのステータス</option>
           <option value="todo">未着手</option>
           <option value="in-progress">進行中</option>
           <option value="done">完了</option>
         </select>
-        <select class="filter-select" id="priorityFilter">
+        <select class="filter-select" id="priorityFilter" aria-label="優先度で絞り込み">
           <option value="all">すべての優先度</option>
           <option value="high">高</option>
           <option value="medium">中</option>
           <option value="low">低</option>
         </select>
-        <select class="filter-select" id="categoryFilter">
+        <select class="filter-select" id="categoryFilter" aria-label="カテゴリで絞り込み">
           <option value="all">すべてのカテゴリ</option>
         </select>
       </div>
@@ -51,9 +53,9 @@
       <!-- カレンダー表示 -->
       <div class="calendar-section" id="calendarSection" style="display:none;">
         <div class="calendar-header">
-          <button class="icon-btn cal-nav-btn" id="calPrevBtn">&#8249;</button>
+          <button class="icon-btn cal-nav-btn" id="calPrevBtn" aria-label="前の月">&#8249;</button>
           <span class="calendar-month-label" id="calendarMonthLabel"></span>
-          <button class="icon-btn cal-nav-btn" id="calNextBtn">&#8250;</button>
+          <button class="icon-btn cal-nav-btn" id="calNextBtn" aria-label="次の月">&#8250;</button>
         </div>
         <div class="calendar-dow">
           <span>日</span><span>月</span><span>火</span>
@@ -63,7 +65,7 @@
       </div>
 
       <div class="data-actions" id="dataActions" style="display:none;">
-        <input type="file" id="importFile" accept=".json" style="display:none;">
+        <input type="file" id="importFile" accept=".json" aria-label="JSONファイルをインポート" style="display:none;">
         <button class="btn btn-primary btn-sm" id="importBtn">↑ インポート</button>
         <button class="btn btn-primary btn-sm" id="exportBtn">↓ エクスポート</button>
       </div>
@@ -79,20 +81,20 @@
     <div class="modal">
       <div class="modal-header">
         <h2 class="modal-title" id="modalTitle">課題を追加</h2>
-        <button class="modal-close" id="modalClose">&times;</button>
+        <button class="modal-close" id="modalClose" aria-label="閉じる">&times;</button>
       </div>
       <form class="modal-form" id="taskForm">
         <div class="form-group">
-          <label class="form-label">タイトル <span class="required">*</span></label>
-          <input type="text" class="form-input" id="taskTitle" required placeholder="課題のタイトルを入力">
+          <label class="form-label" for="taskTitle">タイトル <span class="required">*</span></label>
+          <input type="text" class="form-input" id="taskTitle" required placeholder="課題のタイトルを入力" autocomplete="off">
         </div>
         <div class="form-group">
-          <label class="form-label">説明</label>
-          <textarea class="form-textarea" id="taskDescription" placeholder="詳細を入力..." rows="3"></textarea>
+          <label class="form-label" for="taskDescription">説明</label>
+          <textarea class="form-textarea" id="taskDescription" placeholder="詳細を入力…" rows="3" autocomplete="off"></textarea>
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label class="form-label">優先度</label>
+            <label class="form-label" for="taskPriority">優先度</label>
             <select class="form-input" id="taskPriority">
               <option value="high">高</option>
               <option value="medium" selected>中</option>
@@ -100,7 +102,7 @@
             </select>
           </div>
           <div class="form-group">
-            <label class="form-label">ステータス</label>
+            <label class="form-label" for="taskStatus">ステータス</label>
             <select class="form-input" id="taskStatus">
               <option value="todo">未着手</option>
               <option value="in-progress">進行中</option>
@@ -110,19 +112,19 @@
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label class="form-label">期限</label>
-            <input type="date" class="form-input" id="taskDueDate">
+            <label class="form-label" for="taskDueDate">期限</label>
+            <input type="date" class="form-input" id="taskDueDate" autocomplete="off">
           </div>
           <div class="form-group">
-            <label class="form-label">カテゴリ</label>
+            <label class="form-label" for="taskCategory">カテゴリ</label>
             <select class="form-input" id="taskCategory">
               <option value="">なし</option>
             </select>
           </div>
         </div>
         <div class="form-group">
-          <label class="form-label">タグ <span class="form-hint">（カンマ区切り）</span></label>
-          <input type="text" class="form-input" id="taskTags" placeholder="例: urgent, frontend, bug">
+          <label class="form-label" for="taskTags">タグ <span class="form-hint">（カンマ区切り）</span></label>
+          <input type="text" class="form-input" id="taskTags" placeholder="例: urgent, frontend, bug" autocomplete="off">
         </div>
         <div class="form-group">
           <label class="recurring-label">
@@ -132,7 +134,7 @@
         <div id="recurrenceOptions" class="recurrence-options">
           <div class="form-row">
             <div class="form-group" style="margin-bottom:0;">
-              <label class="form-label">種類</label>
+              <label class="form-label" for="taskRecurrenceType">種類</label>
               <select class="form-input" id="taskRecurrenceType">
                 <option value="daily">毎日</option>
                 <option value="weekly" selected>毎週</option>
@@ -140,12 +142,12 @@
               </select>
             </div>
             <div class="form-group" style="margin-bottom:0;">
-              <label class="form-label">間隔 <span class="form-hint">（週・日・月）</span></label>
-              <input type="number" class="form-input" id="taskRecurrenceInterval" value="1" min="1" max="99">
+              <label class="form-label" for="taskRecurrenceInterval">間隔 <span class="form-hint">（週・日・月）</span></label>
+              <input type="number" class="form-input" id="taskRecurrenceInterval" value="1" min="1" max="99" autocomplete="off">
             </div>
             <div class="form-group" style="margin-bottom:0;">
-              <label class="form-label">繰り返し回数</label>
-              <input type="number" class="form-input" id="taskRecurrenceCount" value="1" min="1" max="52">
+              <label class="form-label" for="taskRecurrenceCount">繰り返し回数</label>
+              <input type="number" class="form-input" id="taskRecurrenceCount" value="1" min="1" max="52" autocomplete="off">
             </div>
           </div>
         </div>
@@ -162,12 +164,12 @@
     <div class="modal modal-sm">
       <div class="modal-header">
         <h2 class="modal-title">カテゴリ管理</h2>
-        <button class="modal-close" id="categoryModalClose">&times;</button>
+        <button class="modal-close" id="categoryModalClose" aria-label="閉じる">&times;</button>
       </div>
       <div id="categoryList" class="category-list"></div>
       <div class="form-row" style="margin-top:12px; align-items:flex-end;">
         <div class="form-group" style="flex:1; margin-bottom:0;">
-          <input type="text" class="form-input" id="newCategoryInput" placeholder="新しいカテゴリ名">
+          <input type="text" class="form-input" id="newCategoryInput" placeholder="新しいカテゴリ名" aria-label="新しいカテゴリ名" autocomplete="off">
         </div>
         <button class="btn btn-primary" id="addCategoryBtn" style="flex-shrink:0;">追加</button>
       </div>

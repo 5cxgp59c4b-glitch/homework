@@ -271,22 +271,23 @@ function renderTasks() {
     return;
   }
 
-  container.innerHTML = tasks.map(task => {
+  container.innerHTML = tasks.map((task, index) => {
     const dueStatus = task.dueDate ? getDueStatus(task.dueDate) : '';
     const dueLabel  = { overdue: ' 期限超過', 'due-soon': ' 間近', '': '' }[dueStatus];
 
     const dueDateHtml   = task.dueDate
-      ? `<span class="due-date ${dueStatus}">📅 ${formatDate(task.dueDate)}${dueLabel}</span>` : '';
+      ? `<span class="due-date ${dueStatus}"><span aria-hidden="true">📅</span> ${formatDate(task.dueDate)}${dueLabel}</span>` : '';
     const categoryHtml  = task.category
       ? `<span class="badge badge-category">${escapeHtml(task.category)}</span>` : '';
     const tagsHtml      = task.tags.map(tag =>
       `<span class="badge badge-tag">#${escapeHtml(tag)}</span>`
     ).join('');
     const recurringHtml = task.recurring
-      ? `<span class="badge badge-recurring">🔄 ${RECURRENCE_LABELS[task.recurrenceType] || '繰り返し'}</span>` : '';
+      ? `<span class="badge badge-recurring"><span aria-hidden="true">🔄</span> ${RECURRENCE_LABELS[task.recurrenceType] || '繰り返し'}</span>` : '';
 
     return `
-      <div class="task-item priority-${task.priority} status-${task.status}">
+      <div class="task-item priority-${task.priority} status-${task.status}" style="animation-delay:${index * 0.04}s">
+        <div class="task-priority-band"></div>
         <input type="checkbox" class="task-check" ${task.status === 'done' ? 'checked' : ''}
           onchange="toggleDone('${task.id}')">
         <div class="task-content">
@@ -302,8 +303,8 @@ function renderTasks() {
           </div>
         </div>
         <div class="task-actions">
-          <button class="icon-btn" onclick="openEditModal('${task.id}')" title="編集">✏️</button>
-          <button class="icon-btn delete" onclick="deleteTask('${task.id}')" title="削除">🗑️</button>
+          <button class="icon-btn" onclick="openEditModal('${task.id}')" aria-label="編集"><span aria-hidden="true">✏️</span></button>
+          <button class="icon-btn delete" onclick="deleteTask('${task.id}')" aria-label="削除"><span aria-hidden="true">🗑️</span></button>
         </div>
       </div>
     `;
@@ -345,9 +346,9 @@ function renderCalendar() {
     const moreCount = tasks.length - visible.length;
 
     const tasksHtml = visible.map(t => `
-      <span class="cal-task priority-dot-${t.priority} ${t.status === 'done' ? 'cal-task-done' : ''}"
+      <button class="cal-task priority-dot-${t.priority} ${t.status === 'done' ? 'cal-task-done' : ''}"
             onclick="openEditModal('${t.id}')"
-            title="${escapeHtml(t.title)}">${escapeHtml(t.title)}</span>
+            aria-label="${escapeHtml(t.title)}">${escapeHtml(t.title)}</button>
     `).join('');
 
     cells += `
@@ -390,7 +391,7 @@ function renderCategoryList() {
   container.innerHTML = state.categories.map(c => `
     <div class="category-item">
       <span>${escapeHtml(c)}</span>
-      <button class="icon-btn delete" onclick="deleteCategory('${escapeHtml(c)}')" title="削除">🗑️</button>
+      <button class="icon-btn delete" onclick="deleteCategory('${escapeHtml(c)}')" aria-label="${escapeHtml(c)}を削除"><span aria-hidden="true">🗑️</span></button>
     </div>
   `).join('');
 }
