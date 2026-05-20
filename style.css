@@ -79,43 +79,14 @@ body {
   box-shadow: 0 0 0 2px rgba(79,70,229,0.08);
 }
 
-/* ---- Toolbar (stats + view toggle) ---- */
+/* ---- Toolbar (view toggle) ---- */
 .toolbar {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
   margin-bottom: 16px;
   flex-wrap: wrap;
-}
-
-/* ---- Stats ---- */
-.stats {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.stat-card {
-  background: #fff;
-  border: 1px solid #e5e5e5;
-  border-radius: 8px;
-  padding: 10px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 72px;
-}
-
-.stat-value {
-  font-size: 22px;
-  font-weight: 700;
-  color: #111;
-}
-
-.stat-label {
-  font-size: 11px;
-  color: #888;
 }
 
 /* ---- View Toggle ---- */
@@ -654,14 +625,20 @@ body {
   .filter-select { min-width: 115px; flex-shrink: 0; width: auto; font-size: 16px; }
 
   /* ツールバー */
-  .toolbar { margin-bottom: 12px; }
-  .stat-card { padding: 8px 12px; min-width: 60px; }
-  .stat-value { font-size: 18px; }
+  .toolbar { margin-bottom: 8px; }
 
   /* カレンダー */
+  .calendar-section {
+    margin: 0 -10px;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
   .cal-cell {
-    min-height: 110px;
+    height: calc((100svh - 210px) / 6);
+    min-height: unset;
     padding: 4px 3px;
+    overflow: hidden;
   }
   .cal-day-number { font-size: 12px; }
   .cal-day-today { width: 22px; height: 22px; font-size: 11px; }

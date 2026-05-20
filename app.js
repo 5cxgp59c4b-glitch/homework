@@ -248,42 +248,11 @@ function setView(view) {
 // ---- Render ----
 
 function render() {
-  renderStats();
   renderTasks();
   renderCategoryFilter();
   renderCategoryOptions();
   renderCategoryList();
   if (state.view === 'calendar') renderCalendar();
-}
-
-function renderStats() {
-  const tasks      = state.tasks;
-  const total      = tasks.length;
-  const inProgress = tasks.filter(t => t.status === 'in-progress').length;
-  const done       = tasks.filter(t => t.status === 'done').length;
-  const overdue    = tasks.filter(t =>
-    t.dueDate && t.status !== 'done' && getDueStatus(t.dueDate) === 'overdue'
-  ).length;
-
-  document.getElementById('stats').innerHTML = `
-    <div class="stat-card">
-      <span class="stat-value">${total}</span>
-      <span class="stat-label">合計</span>
-    </div>
-    <div class="stat-card">
-      <span class="stat-value">${inProgress}</span>
-      <span class="stat-label">進行中</span>
-    </div>
-    <div class="stat-card">
-      <span class="stat-value">${done}</span>
-      <span class="stat-label">完了</span>
-    </div>
-    ${overdue > 0 ? `
-    <div class="stat-card" style="border-color:#fca5a5;">
-      <span class="stat-value" style="color:#dc2626;">${overdue}</span>
-      <span class="stat-label">期限超過</span>
-    </div>` : ''}
-  `;
 }
 
 function renderTasks() {
