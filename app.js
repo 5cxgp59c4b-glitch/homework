@@ -31,10 +31,56 @@ function loadData() {
 }
 
 function saveData() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({
-    tasks:      state.tasks,
-    categories: state.categories,
-  }));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      tasks:      state.tasks,
+      categories: state.categories,
+    }));
+  } catch (e) {
+    if (e.name === 'QuotaExceededError' || e.code === 22 || e.code === 1014) {
+      handleStorageQuotaError();
+    } else {
+      console.error('データの保存に失敗しました:', e);
+    }
+  }
+}
+
+function handleStorageQuotaError() {
+  const doneTasks = state.tasks
+    .filter(t => t.status === 'done')
+    .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+  const targets = doneTasks.slice(0, 20);
+
+  if (targets.length === 0) {
+    alert(
+      'ストレージの容量が不足しているため、データを保存できませんでした。\n' +
+      'エクスポートで現在のデータをバックアップし、不要な課題を削除してください。'
+    );
+    return;
+  }
+
+  const shouldDelete = confirm(
+    'ストレージの容量が不足しているため、データを保存できませんでした。\n\n' +
+    `完了済みの課題のうち古いものから ${targets.length} 件を削除して容量を確保しますか？\n` +
+    '（削除前にエクスポートでバックアップすることをお勧めします）'
+  );
+
+  if (!shouldDelete) return;
+
+  const targetIds = new Set(targets.map(t => t.id));
+  state.tasks = state.tasks.filter(t => !targetIds.has(t.id));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      tasks:      state.tasks,
+      categories: state.categories,
+    }));
+    render();
+  } catch (e2) {
+    alert(
+      '古い完了済み課題を削除しましたが、まだ容量が不足しています。\n' +
+      'エクスポートでデータをバックアップし、手動で課題を削除してください。'
+    );
+  }
 }
 
 // ---- Utilities ----
@@ -241,7 +287,14 @@ function renderStats() {
 }
 
 function renderTasks() {
-  const tasks     = getFilteredTasks();
+  const tasks = getFilteredTasks().sort((a, b) => {
+    const aDone = a.status === 'done', bDone = b.status === 'done';
+    if (aDone !== bDone) return aDone ? 1 : -1;
+    if (!a.dueDate && !b.dueDate) return 0;
+    if (!a.dueDate) return 1;
+    if (!b.dueDate) return -1;
+    return a.dueDate.localeCompare(b.dueDate);
+  });
   const container = document.getElementById('taskList');
 
   if (tasks.length === 0) {
@@ -299,7 +352,7 @@ function renderCalendar() {
   const today       = new Date();
 
   const taskMap = {};
-  getFilteredTasks().forEach(task => {
+  state.tasks.forEach(task => {
     if (!task.dueDate) return;
     const d = new Date(task.dueDate + 'T00:00:00');
     if (d.getFullYear() !== year || d.getMonth() !== month) return;

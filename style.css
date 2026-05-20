@@ -565,12 +565,19 @@ body {
   padding: 8px 11px;
   border: 1px solid #ddd;
   border-radius: 6px;
-  font-size: 13px;
+  font-size: 16px;
   font-family: inherit;
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
   background: #fff;
   color: #111;
+}
+
+@media (min-width: 601px) {
+  .form-input,
+  .form-textarea {
+    font-size: 13px;
+  }
 }
 
 .form-input:focus,
@@ -643,8 +650,8 @@ body {
     margin-bottom: 12px;
   }
   .filters::-webkit-scrollbar { display: none; }
-  .filter-search { min-width: 150px; flex-shrink: 0; }
-  .filter-select { min-width: 115px; flex-shrink: 0; width: auto; }
+  .filter-search { min-width: 150px; flex-shrink: 0; font-size: 16px; }
+  .filter-select { min-width: 115px; flex-shrink: 0; width: auto; font-size: 16px; }
 
   /* ツールバー */
   .toolbar { margin-bottom: 12px; }
