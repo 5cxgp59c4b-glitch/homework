@@ -13,6 +13,7 @@ let state = {
   editingId:    null,
   view:         'calendar',
   calendarDate: new Date(),
+  selectedDay:  null,
 };
 
 // ---- Storage ----
@@ -346,13 +347,18 @@ function renderCalendar() {
     const moreCount = tasks.length - visible.length;
 
     const tasksHtml = visible.map(t => `
-      <button class="cal-task priority-dot-${t.priority} ${t.status === 'done' ? 'cal-task-done' : ''}"
-            onclick="openEditModal('${t.id}')"
-            aria-label="${escapeHtml(t.title)}">${escapeHtml(t.title)}</button>
+      <div class="cal-task priority-dot-${t.priority} ${t.status === 'done' ? 'cal-task-done' : ''}">${escapeHtml(t.title)}</div>
     `).join('');
 
+    const dayKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const isSelected = state.selectedDay === dayKey;
+
     cells += `
-      <div class="cal-cell ${isToday ? 'cal-cell-today' : ''}">
+      <div class="cal-cell ${isToday ? 'cal-cell-today' : ''} ${isSelected ? 'cal-cell-selected' : ''}"
+           onclick="openDayPanel(${year}, ${month}, ${day})"
+           role="button" tabindex="0"
+           aria-label="${month + 1}月${day}日のタスクを表示（${tasks.length}件）"
+           onkeydown="if(event.key==='Enter'||event.key===' ')openDayPanel(${year},${month},${day})">
         <div class="cal-day-number ${isToday ? 'cal-day-today' : ''}">${day}</div>
         ${tasksHtml}
         ${moreCount > 0 ? `<div class="cal-more">+${moreCount}件</div>` : ''}
@@ -361,6 +367,53 @@ function renderCalendar() {
   }
 
   document.getElementById('calendarGrid').innerHTML = cells;
+}
+
+function openDayPanel(year, month, day) {
+  const key = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+  if (state.selectedDay === key) {
+    closeDayPanel();
+    return;
+  }
+  state.selectedDay = key;
+
+  const tasks = state.tasks.filter(t => t.dueDate === key);
+  const label = `${month + 1}月${day}日`;
+
+  document.getElementById('dayTaskPanelTitle').textContent =
+    `${label}のタスク（${tasks.length}件）`;
+
+  const list = document.getElementById('dayTaskList');
+  if (tasks.length === 0) {
+    list.innerHTML = '<p class="day-task-empty">この日のタスクはありません</p>';
+  } else {
+    list.innerHTML = tasks.map(t => `
+      <div class="day-task-item">
+        <div class="day-task-body">
+          <span class="day-task-title${t.status === 'done' ? ' done' : ''}">${escapeHtml(t.title)}</span>
+          <div class="day-task-meta">
+            <span class="day-task-badge priority-dot-${t.priority}">${PRIORITY_LABELS[t.priority]}</span>
+            <span class="day-task-badge status-badge-${t.status}">${STATUS_LABELS[t.status]}</span>
+            ${t.category ? `<span class="day-task-category">${escapeHtml(t.category)}</span>` : ''}
+            ${t.tags && t.tags.length ? t.tags.map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('') : ''}
+          </div>
+          ${t.description ? `<p class="day-task-desc">${escapeHtml(t.description)}</p>` : ''}
+        </div>
+        <button class="btn btn-ghost btn-sm day-task-edit"
+                onclick="closeDayPanel(); openEditModal('${t.id}');"
+                aria-label="${escapeHtml(t.title)}を編集">編集</button>
+      </div>
+    `).join('');
+  }
+
+  document.getElementById('dayTaskModalOverlay').classList.add('open');
+  renderCalendar();
+}
+
+function closeDayPanel() {
+  state.selectedDay = null;
+  closeModalWithAnimation('dayTaskModalOverlay', renderCalendar);
 }
 
 function renderCategoryFilter() {
@@ -429,6 +482,20 @@ function importData(file) {
 
 // ---- Modal helpers ----
 
+function closeModalWithAnimation(overlayId, onClosed) {
+  const overlay = document.getElementById(overlayId);
+  if (!overlay.classList.contains('open')) return;
+  overlay.classList.remove('open');
+  overlay.classList.add('closing');
+  function onEnd(e) {
+    if (e.target !== overlay) return;
+    overlay.classList.remove('closing');
+    overlay.removeEventListener('animationend', onEnd);
+    if (onClosed) onClosed();
+  }
+  overlay.addEventListener('animationend', onEnd);
+}
+
 function openAddModal() {
   state.editingId = null;
   document.getElementById('modalTitle').textContent           = '課題を追加';
@@ -472,12 +539,11 @@ function openEditModal(id) {
 }
 
 function closeTaskModal() {
-  document.getElementById('modalOverlay').classList.remove('open');
-  state.editingId = null;
+  closeModalWithAnimation('modalOverlay', () => { state.editingId = null; });
 }
 
 function closeCategoryModal() {
-  document.getElementById('categoryModalOverlay').classList.remove('open');
+  closeModalWithAnimation('categoryModalOverlay');
 }
 
 // ---- Event Listeners ----
@@ -542,14 +608,20 @@ document.getElementById('listViewBtn').addEventListener('click', () => setView('
 document.getElementById('calendarViewBtn').addEventListener('click', () => setView('calendar'));
 
 document.getElementById('calPrevBtn').addEventListener('click', () => {
+  state.selectedDay = null;
+  closeModalWithAnimation('dayTaskModalOverlay');
   state.calendarDate.setMonth(state.calendarDate.getMonth() - 1);
   renderCalendar();
 });
 
 document.getElementById('calNextBtn').addEventListener('click', () => {
+  state.selectedDay = null;
+  closeModalWithAnimation('dayTaskModalOverlay');
   state.calendarDate.setMonth(state.calendarDate.getMonth() + 1);
   renderCalendar();
 });
+
+document.getElementById('dayTaskPanelClose').addEventListener('click', closeDayPanel);
 
 document.getElementById('manageCategoriesBtn').addEventListener('click', () => {
   renderCategoryList();
@@ -583,8 +655,12 @@ document.getElementById('newCategoryInput').addEventListener('keydown', e => {
 
 document.addEventListener('keydown', e => {
   const isInput = ['input', 'textarea', 'select'].includes(e.target.tagName.toLowerCase());
-  if (e.key === 'Escape') { closeTaskModal(); closeCategoryModal(); }
+  if (e.key === 'Escape') { closeTaskModal(); closeCategoryModal(); closeDayPanel(); }
   if (e.key === 'n' && !isInput && !e.metaKey && !e.ctrlKey) openAddModal();
+});
+
+document.getElementById('dayTaskModalOverlay').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeDayPanel();
 });
 
 document.getElementById('exportBtn').addEventListener('click', exportData);

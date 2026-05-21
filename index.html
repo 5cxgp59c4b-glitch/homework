@@ -64,6 +64,7 @@
         <div class="calendar-grid" id="calendarGrid"></div>
       </div>
 
+
       <div class="data-actions" id="dataActions" style="display:none;">
         <input type="file" id="importFile" accept=".json" aria-label="JSONファイルをインポート" style="display:none;">
         <button class="btn btn-primary btn-sm" id="importBtn">↑ インポート</button>
@@ -156,6 +157,17 @@
           <button type="submit" class="btn btn-primary" id="submitBtn">追加</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- 日付タスク一覧モーダル -->
+  <div class="modal-overlay" id="dayTaskModalOverlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 class="modal-title" id="dayTaskPanelTitle"></h2>
+        <button class="modal-close" id="dayTaskPanelClose" aria-label="閉じる">&times;</button>
+      </div>
+      <div class="day-task-list" id="dayTaskList"></div>
     </div>
   </div>
 
